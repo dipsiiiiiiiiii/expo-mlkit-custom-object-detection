@@ -55,3 +55,6 @@ yarn-error.log
 
 # Expo
 .expo/*
+
+# Model files (too large for git)
+example/assets/models/*.tflite
