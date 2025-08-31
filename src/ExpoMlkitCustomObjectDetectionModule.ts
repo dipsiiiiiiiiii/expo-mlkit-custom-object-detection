@@ -1,11 +1,9 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
-import { ExpoMlkitCustomObjectDetectionModuleEvents } from './ExpoMlkitCustomObjectDetection.types';
+import { ExpoMlkitCustomObjectDetectionModuleEvents, DetectedObject } from './ExpoMlkitCustomObjectDetection.types';
 
 declare class ExpoMlkitCustomObjectDetectionModule extends NativeModule<ExpoMlkitCustomObjectDetectionModuleEvents> {
-  PI: number;
-  hello(): string;
-  setValueAsync(value: string): Promise<void>;
+  detectObjects(imagePath: string): Promise<DetectedObject[]>;
 }
 
 // This call loads the native module object from the JSI.

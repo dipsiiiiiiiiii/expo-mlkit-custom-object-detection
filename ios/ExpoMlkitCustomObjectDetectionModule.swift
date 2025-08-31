@@ -1,48 +1,79 @@
 import ExpoModulesCore
+import MLKitObjectDetection
+import MLKitVision
+import UIKit
 
 public class ExpoMlkitCustomObjectDetectionModule: Module {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
+  private lazy var objectDetector: ObjectDetector = {
+    let options = ObjectDetectorOptions()
+    options.detectorMode = .singleImage
+    options.shouldEnableMultipleObjects = true
+    options.shouldEnableClassification = true
+    return ObjectDetector.objectDetector(options: options)
+  }()
+
   public func definition() -> ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoMlkitCustomObjectDetection')` in JavaScript.
     Name("ExpoMlkitCustomObjectDetection")
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants([
-      "PI": Double.pi
-    ])
-
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      return "Hello world! 👋"
-    }
-
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { (value: String) in
-      // Send an event to JavaScript.
-      self.sendEvent("onChange", [
-        "value": value
-      ])
-    }
-
-    // Enables the module to be used as a native view. Definition components that are accepted as part of the
-    // view definition: Prop, Events.
-    View(ExpoMlkitCustomObjectDetectionView.self) {
-      // Defines a setter for the `url` prop.
-      Prop("url") { (view: ExpoMlkitCustomObjectDetectionView, url: URL) in
-        if view.webView.url != url {
-          view.webView.load(URLRequest(url: url))
+    AsyncFunction("detectObjects") { (imagePath: String, promise: Promise) in
+      guard let image = self.loadImageFromPath(imagePath) else {
+        promise.reject("IMAGE_LOAD_ERROR", "Failed to load image from path: \(imagePath)")
+        return
+      }
+      
+      let visionImage = VisionImage(image: image)
+      
+      self.objectDetector.process(visionImage) { objects, error in
+        DispatchQueue.main.async {
+          if let error = error {
+            promise.reject("DETECTION_ERROR", error.localizedDescription)
+            return
+          }
+          
+          let detectedObjects = objects?.map { object in
+            var result: [String: Any] = [
+              "boundingBox": [
+                "left": object.frame.minX,
+                "top": object.frame.minY,
+                "width": object.frame.width,
+                "height": object.frame.height
+              ],
+              "trackingId": object.trackingID ?? NSNull()
+            ]
+            
+            if !object.labels.isEmpty {
+              result["labels"] = object.labels.map { label in
+                [
+                  "text": label.text,
+                  "confidence": label.confidence,
+                  "index": label.index
+                ]
+              }
+            }
+            
+            return result
+          } ?? []
+          
+          promise.resolve(detectedObjects)
         }
       }
+    }
 
-      Events("onLoad")
+  }
+  
+  private func loadImageFromPath(_ path: String) -> UIImage? {
+    if path.hasPrefix("http://") || path.hasPrefix("https://") {
+      guard let url = URL(string: path),
+            let data = try? Data(contentsOf: url) else { return nil }
+      return UIImage(data: data)
+    } else if path.hasPrefix("file://") {
+      let url = URL(string: path)
+      guard let filePath = url?.path else { return nil }
+      return UIImage(contentsOfFile: filePath)
+    } else if path.hasPrefix("/") {
+      return UIImage(contentsOfFile: path)
+    } else {
+      return UIImage(named: path)
     }
   }
 }
