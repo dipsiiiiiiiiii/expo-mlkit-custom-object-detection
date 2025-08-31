@@ -18,6 +18,30 @@ export default function App() {
     []
   );
   const [isDetecting, setIsDetecting] = useState(false);
+  const [isModelLoaded, setIsModelLoaded] = useState(false);
+  const [modelLoadStatus, setModelLoadStatus] = useState<string>("");
+
+  const loadYoloModel = async () => {
+    try {
+      setModelLoadStatus("Loading YOLO model...");
+      
+      // Get the actual file path for the YOLO model
+      const modelAsset = require("./assets/models/yolo11n_float32.tflite");
+      const modelSource = RNImage.resolveAssetSource(modelAsset);
+      const modelPath = modelSource.uri;
+      
+      console.log("Model path:", modelPath);
+      
+      const result = await ExpoMlkitCustomObjectDetection.loadCustomModel(modelPath);
+      setIsModelLoaded(true);
+      setModelLoadStatus("YOLO model loaded successfully!");
+      Alert.alert("Success", "YOLO model loaded successfully!");
+    } catch (error) {
+      console.error("Model load error:", error);
+      setModelLoadStatus("Failed to load YOLO model");
+      Alert.alert("Error", "Failed to load YOLO model");
+    }
+  };
 
   const detectObjectsInImage = async () => {
     try {
@@ -42,6 +66,27 @@ export default function App() {
     }
   };
 
+  const detectObjectsWithYolo = async () => {
+    try {
+      setIsDetecting(true);
+      const ballImage = require("./assets/ball_2.png");
+      const source = RNImage.resolveAssetSource(ballImage);
+      const ballImagePath = source.uri;
+      console.log("Detecting with YOLO model, image path:", ballImagePath);
+
+      const results = await ExpoMlkitCustomObjectDetection.detectObjectsWithCustomModel(ballImagePath);
+      setDetectionResults(results);
+      console.log("YOLO Detection results:", results);
+
+      Alert.alert("YOLO Detection Complete", `Found ${results.length} object(s)`);
+    } catch (error) {
+      console.error("YOLO Detection error:", error);
+      Alert.alert("Error", "Failed to detect objects with YOLO model");
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.container}>
@@ -55,11 +100,26 @@ export default function App() {
           />
         </Group>
 
+        <Group name="YOLO Model">
+          <Text style={styles.statusText}>{modelLoadStatus}</Text>
+          <Button
+            title="Load YOLO Model"
+            onPress={loadYoloModel}
+            disabled={isModelLoaded}
+          />
+        </Group>
+
         <Group name="Object Detection">
           <Button
-            title={isDetecting ? "Detecting..." : "Detect Objects"}
+            title={isDetecting ? "Detecting..." : "Detect Objects (MLKit)"}
             onPress={detectObjectsInImage}
             disabled={isDetecting}
+          />
+          <View style={styles.buttonSpacing} />
+          <Button
+            title={isDetecting ? "Detecting..." : "Detect Objects (YOLO)"}
+            onPress={detectObjectsWithYolo}
+            disabled={isDetecting || !isModelLoaded}
           />
         </Group>
 
@@ -146,5 +206,14 @@ const styles = {
   labelText: {
     marginLeft: 10,
     color: "#666",
+  },
+  statusText: {
+    marginBottom: 10,
+    textAlign: "center" as const,
+    fontStyle: "italic" as const,
+    color: "#666",
+  },
+  buttonSpacing: {
+    height: 10,
   },
 };

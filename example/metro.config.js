@@ -22,6 +22,9 @@ config.resolver.extraNodeModules = {
   'expo-mlkit-custom-object-detection': '..',
 };
 
+// Add support for .tflite files
+config.resolver.assetExts.push('tflite');
+
 config.watchFolders = [path.resolve(__dirname, '..')];
 
 config.transformer.getTransformOptions = async () => ({
