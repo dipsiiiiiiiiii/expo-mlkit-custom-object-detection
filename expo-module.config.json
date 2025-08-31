@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["ExpoMlkitCustomObjectDetectionModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.mlkitcustomobjectdetection.ExpoMlkitCustomObjectDetectionModule"]
+  }
+}

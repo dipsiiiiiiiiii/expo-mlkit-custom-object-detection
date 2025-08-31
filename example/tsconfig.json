@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "expo-mlkit-custom-object-detection": ["../src/index"],
+      "expo-mlkit-custom-object-detection/*": ["../src/*"]
+    }
+  }
+}
