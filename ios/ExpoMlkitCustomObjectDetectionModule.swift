@@ -3,6 +3,7 @@ import MLKitObjectDetection
 import MLKitObjectDetectionCustom
 import MLKitVision
 import MLKitCommon
+import TensorFlowLite
 import UIKit
 
 public class ExpoMlkitCustomObjectDetectionModule: Module {
@@ -15,6 +16,7 @@ public class ExpoMlkitCustomObjectDetectionModule: Module {
   }()
   
   private var customObjectDetector: ObjectDetector?
+  private var yoloInference: YoloInference?
 
   public func definition() -> ModuleDefinition {
     Name("ExpoMlkitCustomObjectDetection")
@@ -74,6 +76,48 @@ public class ExpoMlkitCustomObjectDetectionModule: Module {
           
           promise.resolve(detectedObjects)
         }
+      }
+    }
+    
+    AsyncFunction("loadYoloModel") { (modelPath: String, promise: Promise) in
+      do {
+        let finalModelPath = try self.resolveModelPath(modelPath)
+        self.yoloInference = try YoloInference(modelPath: finalModelPath)
+        promise.resolve("YOLO model loaded successfully")
+      } catch {
+        promise.reject("YOLO_MODEL_LOAD_ERROR", "Failed to load YOLO model: \(error.localizedDescription)")
+      }
+    }
+    
+    AsyncFunction("detectObjectsWithYolo") { (imagePath: String, confidenceThreshold: Float, promise: Promise) in
+      guard let yoloInference = self.yoloInference else {
+        promise.reject("YOLO_MODEL_NOT_LOADED", "YOLO model not loaded. Call loadYoloModel first.")
+        return
+      }
+      
+      guard let image = self.loadImageFromPath(imagePath) else {
+        promise.reject("IMAGE_LOAD_ERROR", "Failed to load image from path: \(imagePath)")
+        return
+      }
+      
+      do {
+        let detections = try yoloInference.predict(image: image, confidenceThreshold: confidenceThreshold)
+        let results = detections.map { detection in
+          [
+            "boundingBox": [
+              "left": detection.boundingBox.minX,
+              "top": detection.boundingBox.minY,
+              "width": detection.boundingBox.width,
+              "height": detection.boundingBox.height
+            ],
+            "confidence": detection.confidence,
+            "classId": detection.classId,
+            "className": detection.className ?? "unknown"
+          ]
+        }
+        promise.resolve(results)
+      } catch {
+        promise.reject("YOLO_DETECTION_ERROR", "YOLO detection failed: \(error.localizedDescription)")
       }
     }
     
@@ -169,6 +213,42 @@ public class ExpoMlkitCustomObjectDetectionModule: Module {
     options.maxPerObjectLabelCount = 3
     
     return ObjectDetector.objectDetector(options: options)
+  }
+  
+  private func resolveModelPath(_ modelPath: String) throws -> String {
+    // Handle HTTP URLs - download to temp file
+    if modelPath.hasPrefix("http://") || modelPath.hasPrefix("https://") {
+      guard let url = URL(string: modelPath),
+            let modelData = try? Data(contentsOf: url) else {
+        throw NSError(domain: "ModelDownloadError", code: 500, 
+                      userInfo: [NSLocalizedDescriptionKey: "Failed to download model from URL: \(modelPath)"])
+      }
+      
+      // Save to temporary file
+      let tempDir = FileManager.default.temporaryDirectory
+      let tempFile = tempDir.appendingPathComponent(UUID().uuidString).appendingPathExtension("tflite")
+      try modelData.write(to: tempFile)
+      return tempFile.path
+    }
+    // Handle absolute paths
+    else if modelPath.hasPrefix("/") {
+      return modelPath
+    } 
+    // Handle resource names (try bundle first, then documents)
+    else {
+      if let bundlePath = Bundle.main.path(forResource: modelPath, ofType: "tflite") {
+        return bundlePath
+      } else {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let modelFile = documentsPath.appendingPathComponent("\(modelPath).tflite")
+        if FileManager.default.fileExists(atPath: modelFile.path) {
+          return modelFile.path
+        } else {
+          throw NSError(domain: "ModelNotFound", code: 404, 
+                        userInfo: [NSLocalizedDescriptionKey: "Model file not found: \(modelPath)"])
+        }
+      }
+    }
   }
   
   private func loadImageFromPath(_ path: String) -> UIImage? {

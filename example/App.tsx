@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ExpoMlkitCustomObjectDetection, {
   DetectedObject,
+  YoloDetection,
 } from "expo-mlkit-custom-object-detection";
 import {
   Button,
@@ -10,6 +11,7 @@ import {
   View,
   Image,
   Alert,
+  TextInput,
 } from "react-native";
 import { Image as RNImage } from "react-native";
 
@@ -20,26 +22,29 @@ export default function App() {
   const [isDetecting, setIsDetecting] = useState(false);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [modelLoadStatus, setModelLoadStatus] = useState<string>("");
+  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(0.25);
+  const [confidenceText, setConfidenceText] = useState<string>("0.25");
 
   const loadYoloModel = async () => {
     try {
-      setModelLoadStatus("Loading YOLO model...");
-      
+      setModelLoadStatus("Loading YOLO TensorFlow Lite model...");
+
       // Get the actual file path for the YOLO model
-      const modelAsset = require("./assets/models/yolo11n_float32.tflite");
+      const modelAsset = require("./assets/models/yolo11x_float32.tflite");
       const modelSource = RNImage.resolveAssetSource(modelAsset);
       const modelPath = modelSource.uri;
-      
-      console.log("Model path:", modelPath);
-      
-      const result = await ExpoMlkitCustomObjectDetection.loadCustomModel(modelPath);
+
+      console.log("YOLO TensorFlow Lite model path:", modelPath);
+
+      const result =
+        await ExpoMlkitCustomObjectDetection.loadYoloModel(modelPath);
       setIsModelLoaded(true);
-      setModelLoadStatus("YOLO model loaded successfully!");
-      Alert.alert("Success", "YOLO model loaded successfully!");
+      setModelLoadStatus("YOLO TensorFlow Lite model loaded successfully!");
+      Alert.alert("Success", "YOLO TensorFlow Lite model loaded successfully!");
     } catch (error) {
-      console.error("Model load error:", error);
-      setModelLoadStatus("Failed to load YOLO model");
-      Alert.alert("Error", "Failed to load YOLO model");
+      console.error("YOLO model load error:", error);
+      setModelLoadStatus("Failed to load YOLO TensorFlow Lite model");
+      Alert.alert("Error", "Failed to load YOLO TensorFlow Lite model");
     }
   };
 
@@ -72,16 +77,42 @@ export default function App() {
       const ballImage = require("./assets/ball_2.png");
       const source = RNImage.resolveAssetSource(ballImage);
       const ballImagePath = source.uri;
-      console.log("Detecting with YOLO model, image path:", ballImagePath);
+      console.log(
+        "Detecting with YOLO TensorFlow Lite, image path:",
+        ballImagePath
+      );
 
-      const results = await ExpoMlkitCustomObjectDetection.detectObjectsWithCustomModel(ballImagePath);
-      setDetectionResults(results);
-      console.log("YOLO Detection results:", results);
+      const results: YoloDetection[] =
+        await ExpoMlkitCustomObjectDetection.detectObjectsWithYolo(
+          ballImagePath,
+          confidenceThreshold
+        );
 
-      Alert.alert("YOLO Detection Complete", `Found ${results.length} object(s)`);
+      // Convert YOLO results to DetectedObject format for display
+      const convertedResults: DetectedObject[] = results.map((detection) => ({
+        boundingBox: detection.boundingBox,
+        labels: [
+          {
+            text: `${detection.className} (ID: ${detection.classId})`,
+            confidence: detection.confidence,
+            index: detection.classId,
+          },
+        ],
+      }));
+
+      setDetectionResults(convertedResults);
+      console.log("YOLO TensorFlow Lite Detection results:", results);
+
+      Alert.alert(
+        "YOLO TensorFlow Lite Detection Complete",
+        `Found ${results.length} object(s)`
+      );
     } catch (error) {
-      console.error("YOLO Detection error:", error);
-      Alert.alert("Error", "Failed to detect objects with YOLO model");
+      console.error("YOLO TensorFlow Lite Detection error:", error);
+      Alert.alert(
+        "Error",
+        "Failed to detect objects with YOLO TensorFlow Lite"
+      );
     } finally {
       setIsDetecting(false);
     }
@@ -100,13 +131,37 @@ export default function App() {
           />
         </Group>
 
-        <Group name="YOLO Model">
+        <Group name="YOLO TensorFlow Lite Model">
           <Text style={styles.statusText}>{modelLoadStatus}</Text>
           <Button
-            title="Load YOLO Model"
+            title="Load YOLO TensorFlow Lite Model"
             onPress={loadYoloModel}
             disabled={isModelLoaded}
           />
+
+          <View style={styles.thresholdContainer}>
+            <Text style={styles.thresholdLabel}>
+              Confidence Threshold: {confidenceThreshold}
+            </Text>
+            <TextInput
+              style={styles.thresholdInput}
+              value={confidenceText}
+              onChangeText={(text) => {
+                // Allow any text that matches decimal pattern
+                if (text === "" || /^\d*\.?\d*$/.test(text)) {
+                  setConfidenceText(text);
+
+                  // Update actual threshold value if it's a valid number
+                  const value = parseFloat(text);
+                  if (!isNaN(value) && value >= 0 && value <= 1) {
+                    setConfidenceThreshold(value);
+                  }
+                }
+              }}
+              placeholder="0.25"
+              keyboardType="decimal-pad"
+            />
+          </View>
         </Group>
 
         <Group name="Object Detection">
@@ -117,7 +172,11 @@ export default function App() {
           />
           <View style={styles.buttonSpacing} />
           <Button
-            title={isDetecting ? "Detecting..." : "Detect Objects (YOLO)"}
+            title={
+              isDetecting
+                ? "Detecting..."
+                : "Detect Objects (YOLO TensorFlow Lite)"
+            }
             onPress={detectObjectsWithYolo}
             disabled={isDetecting || !isModelLoaded}
           />
@@ -215,5 +274,25 @@ const styles = {
   },
   buttonSpacing: {
     height: 10,
+  },
+  thresholdContainer: {
+    marginTop: 15,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+  },
+  thresholdLabel: {
+    fontSize: 16,
+    fontWeight: "bold" as const,
+    flex: 1,
+  },
+  thresholdInput: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+    padding: 8,
+    width: 80,
+    textAlign: "center" as const,
+    backgroundColor: "#fff",
   },
 };

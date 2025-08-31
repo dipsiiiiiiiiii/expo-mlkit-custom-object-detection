@@ -21,6 +21,7 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.dependency 'GoogleMLKit/ObjectDetection'
   s.dependency 'GoogleMLKit/ObjectDetectionCustom'
+  s.dependency 'TensorFlowLiteSwift'
 
   # Swift/Objective-C compatibility
   s.pod_target_xcconfig = {

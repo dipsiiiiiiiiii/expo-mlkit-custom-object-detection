@@ -17,6 +17,18 @@ export interface ObjectLabel {
   index: number;
 }
 
+export interface YoloDetection {
+  boundingBox: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+  confidence: number;
+  classId: number;
+  className: string;
+}
+
 export type OnLoadEventPayload = {
   url: string;
 };
